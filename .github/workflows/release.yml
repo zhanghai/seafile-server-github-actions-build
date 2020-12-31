@@ -1,0 +1,57 @@
+on:
+  push:
+    tags:
+    - 'v*'
+
+name: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.6'
+      - name: Build project
+        id: build_project
+        run: |
+          SCRIPT_NAME=build3.sh
+          wget "https://raw.githubusercontent.com/haiwen/seafile-rpi/master/${SCRIPT_NAME}"
+          echo "::set-output name=script_path::${SCRIPT_NAME}"
+          echo "::set-output name=script_name::${SCRIPT_NAME}"
+          BUILD_VERSION="${GITHUB_REF/refs\/tags\/v/}"
+          sudo bash ${SCRIPT_NAME} ${BUILD_VERSION}
+          ARTIFACT_PATH="$(echo built-seafile-server-pkgs/seafile-server_*.tar.gz)"
+          echo "::set-output name=artifact_path::${ARTIFACT_PATH}"
+          ARTIFACT_NAME="$(basename "${ARTIFACT_PATH}")"
+          echo "::set-output name=artifact_name::${ARTIFACT_NAME}"
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          body: See also https://download.seadrive.org/${{ steps.build_project.outputs.artifact_name }}.
+      - name: Upload build script
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.build_project.outputs.script_path }}
+          asset_name: ${{ steps.build_project.outputs.script_name }}
+          asset_content_type: text/x-shellscript
+      - name: Upload build artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.build_project.outputs.artifact_path }}
+          asset_name: ${{ steps.build_project.outputs.artifact_name }}
+          asset_content_type: application/gzip
